@@ -1,0 +1,88 @@
+version: '3.7'
+
+services:
+  nginx:
+    container_name: "${APP_ENV}.${APP_NAME}.nginx"
+    build: docker/nginx
+    domainname: "nginx.${APP_NAME}.${APP_ENV}"
+    hostname: "nginx"
+    restart: always
+    ports:
+      - "${EXPOSE_HTTP_PORT}:80"
+    working_dir: ${APP_BASE_PATH}/
+    volumes:
+      - ./:${APP_BASE_PATH}/
+    environment:
+      NGINX_HOST_PATH: "${APP_BASE_PATH}/public/"
+      NGINX_PHP_FPM_HOST: "${APP_ENV}.${APP_NAME}.php-fpm"
+    depends_on:
+      - php-fpm
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "256m"
+        max-file: "10"
+    networks:
+      - external
+      - internal
+
+  php-fpm:
+    container_name: "${APP_ENV}.${APP_NAME}.php-fpm"
+    build: docker/php-fpm
+    domainname: "php-fpm.${APP_NAME}.${APP_ENV}"
+    hostname: "php-fpm"
+    restart: always
+    working_dir: ${APP_BASE_PATH}
+    volumes:
+      - ./:${APP_BASE_PATH}
+    environment:
+      APP_BASE_PATH: ${APP_BASE_PATH}
+      XDEBUG_CONFIG: "enable=${XDEBUG_ENABLE} \
+                      remote_host=0.0.0.0 \
+                      remote_port=9000 \
+                      remote_enable=${XDEBUG_ENABLE} \
+                      remote_autostart=off \
+                      idekey=PHPSTORM \
+                      remote_connect_back=${XDEBUG_ENABLE}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "256m"
+        max-file: "10"
+    networks:
+      - internal
+      - external
+
+  mysql:
+    image: mariadb:${MARIADB_VERSION:-latest}
+    container_name: "${APP_ENV}.${APP_NAME}.mysql"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-password}
+      - MYSQL_USER=${DB_USERNAME:-root}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-password}
+      - MYSQL_DATABASE=${DB_DATABASE:-wordpress}
+    restart: always
+    networks:
+      - internal
+
+  redis:
+    image: "redis:alpine"
+    container_name: "${APP_ENV}.${APP_NAME}.redis"
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - REDIS_MAX_MEMORY=128mb
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - ./data/redis:/data
+    restart: always
+    networks:
+      - internal
+
+networks:
+  external:
+    name: ${APP_NETWORK_NAME}
+    external: true
+  internal:
+    internal: true
